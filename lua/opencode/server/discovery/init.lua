@@ -102,27 +102,74 @@ function M.get()
     end)
 end
 
+---Read OpenCode 2's background service registration file, if any.
+---This is OpenCode 2's discovery contract: its clients find the shared service through this file.
+---See `@opencode-ai/client`'s service module and https://opencode.ai/v2/docs/build/client.
+---
+---@return { url?: string, pid?: integer, version?: string, password?: string }?
+local function read_v2_service_registration()
+  local state_dir = vim.env.XDG_STATE_HOME
+  if not state_dir or state_dir == "" then
+    state_dir = vim.fs.joinpath(vim.env.HOME or "", ".local", "state")
+  end
+
+  local path = vim.fs.joinpath(state_dir, "opencode", "service.json")
+  local file = io.open(path, "r")
+  if not file then
+    return nil
+  end
+
+  local content = file:read("*a")
+  file:close()
+
+  local ok, registration = pcall(vim.fn.json_decode, content)
+  if not ok or type(registration) ~= "table" or type(registration.url) ~= "string" then
+    return nil
+  end
+
+  return registration
+end
+
 ---Search for `opencode` processes on this machine and attempt to resolve them to servers.
+---OpenCode 1 servers are found via `--port` process arguments;
+---OpenCode 2 services via their registration file.
 ---
 ---@return Promise<opencode.server.Server[]>
 function M.locally()
   local Promise = require("opencode.promise")
+
   return require("opencode.server.discovery.process")
     .get()
     :next(function(processes)
-      if #processes == 0 then
-        return Promise.reject("No `opencode ... --port` processes found")
-      else
-        return Promise.resolve(processes)
+      ---@type Promise<opencode.server.Server>[]
+      local candidates = vim.tbl_map(function(process) ---@param process opencode.server.discovery.process.Process
+        return require("opencode.server").new("http://localhost:" .. process.port)
+      end, processes)
+
+      -- OpenCode 2's service doesn't run with `--port`, so it's invisible to process discovery.
+      -- Its registration file may carry a password, which overrides our configured one for that server only,
+      -- mirroring `Service.headers()`'s basic auth of username `opencode`.
+      local registration = read_v2_service_registration()
+      if registration then
+        table.insert(
+          candidates,
+          -- Registration credentials must be present during construction; the health probe authenticates
+          require("opencode.server").new(registration.url, { password = registration.password }):next(function(server)
+            -- Guard against a stale registration pointing at a server we shouldn't trust
+            if registration.pid ~= nil and server.pid ~= nil and server.pid ~= tonumber(registration.pid) then
+              return Promise.reject("Stale OpenCode 2 service registration (PID mismatch)")
+            end
+            return Promise.resolve(server)
+          end)
+        )
       end
-    end)
-    :next(function(processes)
+
+      if #candidates == 0 then
+        return Promise.reject("No `opencode ... --port` processes found and no OpenCode 2 service registered")
+      end
+
       -- `all_settled` because we expect non-servers (falsely discovered processes) to reject
-      return Promise.all_settled(
-        vim.tbl_map(function(process) ---@param process opencode.server.discovery.process.Process
-          return require("opencode.server").new("http://localhost:" .. process.port)
-        end, processes)
-      )
+      return Promise.all_settled(candidates)
     end)
     :next(function(results)
       local servers = {}
