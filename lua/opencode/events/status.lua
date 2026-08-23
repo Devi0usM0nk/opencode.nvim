@@ -33,7 +33,11 @@ function M.update(event, url)
     event.type == "server.connected" or (event.type == "session.status" and event.properties.status.type == "idle")
   then
     status = "idle"
-  elseif event.type == "session.status" and event.properties.status.type == "busy" then
+  elseif
+    event.type == "session.status"
+    and (event.properties.status.type == "busy" or event.properties.status.type == "retry")
+  then
+    -- OpenCode 2 reports transient failures as `retry`; show it as activity
     status = "busy"
   elseif event.type == "session.status" and event.properties.status.type == "error" then
     status = "error"

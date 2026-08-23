@@ -71,13 +71,16 @@ Server.__index = Server
 
 ---Events emitted by OpenCode.
 ---Not exhaustive.
+---OpenCode 2 events are normalized to these shapes on subscription (see `Server:normalize_event`),
+---with its extra fields preserved.
 ---@alias opencode.server.Event
 ---| { type: "file.edited" }
----| { type: "permission.asked", properties: { id: number, permission: string, patterns: string[], metadata?: { diff: string, filepath: string } } }
----| { type: "permission.replied", properties: { requestID: number } }
+---| { type: "filesystem.changed" }
+---| { type: "permission.asked", properties: { id: number|string, permission: string, patterns: string[], metadata?: { diff: string, filepath: string } } }
+---| { type: "permission.replied", properties: { requestID: number|string } }
 ---| { type: "server.connected" }
 ---| { type: "server.instance.disposed" }
----| { type: "session.status", properties: { status: { type: "idle" | "busy" | "error" } } }
+---| { type: "session.status", properties: { status: { type: "idle" | "busy" | "error" | "retry" } } }
 ---| { type: "tui.command.execute", properties: { command: string } }
 ---| { type: string, properties: table }
 
@@ -408,7 +411,25 @@ end
 ---@param on_error fun(msg: string?, code: number)
 ---@return number job_id
 function Server:sse_subscribe(on_success, on_error)
-  return self:curl("/event", "GET", nil, on_success, on_error, { persistent = true })
+  return self:curl("/event", "GET", nil, function(response)
+    on_success(self.version == "v2" and self:normalize_event(response) or response)
+  end, on_error, { persistent = true })
+end
+
+---Normalize an OpenCode 2 event to this plugin's event shape (OpenCode 1's).
+---OpenCode 2 wraps payload fields in `data` instead of `properties`,
+---and names permission actions `action` instead of `permission`.
+---Extra OpenCode 2 fields are preserved.
+---
+---@param response table
+---@return opencode.server.Event
+function Server:normalize_event(response)
+  local properties = response.data or {}
+  if properties.action ~= nil and properties.permission == nil then
+    properties.permission = properties.action
+  end
+  response.properties = properties
+  return response
 end
 
 ---How often OpenCode sends heartbeat events.

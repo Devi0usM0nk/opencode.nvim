@@ -3,7 +3,7 @@
 
 local M = {}
 
----@type integer?
+---@type integer|string|nil
 local current_edit_request_id = nil
 ---@type integer?
 local diff_tabpage = nil
