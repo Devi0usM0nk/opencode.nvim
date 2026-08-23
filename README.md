@@ -214,6 +214,13 @@ Run `opencode` locally however you like and opencode.nvim will find them! Or poi
 
 If opencode.nvim can't find a running `opencode`, it starts one via `vim.g.opencode_opts.server.start`, defaulting to `term://opencode --port`.
 
+#### OpenCode 2 (`opencode2`)
+
+opencode.nvim supports OpenCode 1 and the OpenCode 2 beta side by side, detecting each server's API automatically (see `vim.g.opencode_opts.server.version`). Discovery covers both: OpenCode 1 servers via `--port` process arguments, and OpenCode 2's background service via its registration file, which is written whenever an OpenCode 2 client starts its shared service.
+
+> [!NOTE]
+> OpenCode 2's TUI doesn't take `--port`; running any `opencode2` client brings up and registers the shared service that opencode.nvim discovers. To start one from Neovim instead, override `server.start`, e.g. with `term://opencode serve --port` or your own terminal integration.
+
 <details>
 <summary>Start via <a href="https://github.com/folke/snacks.nvim/blob/main/docs/terminal.md">snacks.terminal</a></summary>
 
