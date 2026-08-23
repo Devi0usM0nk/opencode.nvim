@@ -21,6 +21,7 @@ local defaults = {
   server = {
     url = nil,
     connect = true,
+    version = "auto",
     username = vim.env.OPENCODE_SERVER_USERNAME or "opencode", -- Same env vars and defaults as OpenCode
     password = vim.env.OPENCODE_SERVER_PASSWORD,
     start = function()
