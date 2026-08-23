@@ -221,12 +221,10 @@ function Server:curl(path, method, body, on_success, on_error, opts)
     "-N",
   }
 
-  local username = require("opencode.config").opts.server.username
-  local password = require("opencode.config").opts.server.password
-  if username and password then
+  if self.username and self.password then
     -- We can always send credentials; servers with no auth set just ignore them
     table.insert(cmd, "--user")
-    table.insert(cmd, username .. ":" .. password)
+    table.insert(cmd, self.username .. ":" .. self.password)
   end
 
   if not opts.persistent then
